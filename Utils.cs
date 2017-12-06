@@ -1,37 +1,85 @@
+/* Utilities commonly needed for programmable blocks
+   in Space Engineers.
+
+   Usage:
+
+    public void Main(string argument) {
+      using (var utils = new Utils(this)) {
+        try {
+          // actual program
+        } catch (Exception e) {
+          utils.Print(e);
+        }
+      }
+    }
+  
+   This class implements buffered output on LCD normal and wide panels
+   (one screen or a vertical row of screens of the same size).
+   Screns are searched automatically based on the name of the
+   programmable block:
+   - Programmable block must be called PB-SomeName
+   - Paired screens must be called Screen-SomeName-NP
+     where N is number of screen (starting from 0),
+     P is optional postfix: 
+     - "w" postfix on any screen enables wide mode on all screens
+     - "r" postfix enables raw mode (only on the 0-th screen)
+     Example: Screen-SomeName-0 and Screen-SomeName-1 if normal screens;
+     Example: Screen-SomeName-0w and Screen-SomeName-1 if wide screens.
+   - Output is done by calling utils.Print(...)
+   - If no screen has been found, the output is returned as exception text
+   and will appear in the Programmable block control panel. Note that
+   the programmable block becomes non-functional after throwing an exception
+   until you manually recompile the program.
+
+
+  
+
+ */
 public class Utils : IDisposable {
 
   List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
   IMyProgrammableBlock thisProgrammableBlock;
 
-
-
-
-  int screenRows = 19;
+  // experimental data about rows and column that fit into
+  // regular and wide LCD panels (excluding padding)
+  int screenRows = 19; 
   int screenColumnsNormal = 25;
   int screenColumnsWide = 55;
 
-
   List<IMyTextPanel> screens = new List<IMyTextPanel>();
+  // raw screen mode means that no line breaking or other formatting is done;
+  // this can be used to open LCD in game and copy the output as is.
   bool screenIsRaw = false;
+
+  // true if wide panels are used
   bool screenIsWide = false;
 
+  // true if print() was called on an exception
   bool hadException = false;
 
+  // output buffer
   string outputText = "";
+
+  // number of times the program was executed after compiling
   static int launchCounter = 0;
+
+  // data for counter visualization
   static string launchCounterSpinner = "|/-\\";
 
+  // actual number of columns on the virtual screen
   public int ScreenColumns {
     get {
       return screenIsWide ? screenColumnsWide : screenColumnsNormal;
     }
   }
+  // actual number of rows on the virtual screen
   public int ScreenRows {
     get {
       return screenRows * screens.Count;
     }
   }
 
+  // constructor (pass `this` as argument from the program) 
   public Utils(MyGridProgram program) {
     launchCounter++;
     //print(string.Format("Started at {0}", System.DateTime.Now));
@@ -90,12 +138,15 @@ public class Utils : IDisposable {
     }
   }
 
+  // adds text to buffered output
   public void Print(object obj) {
     var text = obj == null ? "null" : obj.ToString();
     outputText += text;
     outputText += "\n";
   }
 
+  // adds text to buffered output and prevents Utils
+  // from printing "done" at the end
   public void Print(Exception exception) {
     outputText += exception.ToString();
     outputText += "\n";
@@ -273,10 +324,10 @@ public class Utils : IDisposable {
     return result; // sb.ToString();
   }
 
-
+  // determines how to filter blocks list
   public enum FilterGrid {
-    None,
-    Current,
+    None, // no filter
+    Current, // only search through current grid
   }
 
   private bool checkFilterGrid(FilterGrid filter, IMyTerminalBlock block) {
@@ -288,6 +339,7 @@ public class Utils : IDisposable {
     return true;
   }
 
+  // returns all inventories in blocks with specified filter
   public List<IMyInventory> Inventories(FilterGrid filter = FilterGrid.None) {
     var result = new List<IMyInventory>();
     foreach (var block in blocks) {
@@ -302,6 +354,7 @@ public class Utils : IDisposable {
     return result;
   }
 
+  // returns single inventory of the block with specified name
   public IMyInventory FindInventory(string name, FilterGrid filter = FilterGrid.None) {
     var block = FindBlock<IMyTerminalBlock>(name, filter);
     var inventory = block.GetInventory();
@@ -312,43 +365,43 @@ public class Utils : IDisposable {
     }
   }
 
-  /*
-    Ingot/Uranium,
-    AmmoMagazine/NATO_5p56x45mm,
-    PhysicalGunObject/AutomaticRifleItem,
-    PhysicalGunObject/AngleGrinderItem,
-    PhysicalGunObject/HandDrillItem,
-    PhysicalGunObject/WelderItem,
-    Ingot/Iron, Ingot/Platinum,
-    Ore/Cobalt, Ore/Silver, Ore/Gold,
-    Ingot/Gold, Ingot/Silver,
-    Ingot/Magnesium, Ore/Iron, Ore/Ice,
-    Component/Girder,
-    Component/Superconductor,
-    Component/Construction,
-    Component/BulletproofGlass,
-    Component/LargeTube,
-    Component/GravityGenerator,
-    Component/Medical,
-    Component/RadioCommunication,
-    Component/Detector,
-    Component/Explosives,
-    Component/SolarCell,
-    Component/SteelPlate,
-    Component/MetalGrid,
-    Component/Reactor,
-    Component/InteriorPlate,
-    Component/Computer,
-    Component/Display,
-    Component/SmallTube,
-    Component/Motor,
-    Component/PowerCell, Ingot/Nickel,
-    Ingot/Silicon, Ingot/Stone,
-    Ingot/Cobalt,
-    OxygenContainerObject/OxygenBottle,
-    GasContainerObject/HydrogenBottle,
-    Component/Thrust,
-    AmmoMagazine/NATO_25x184mm
+  /* Returns unified inventory item type string. Examples of possible values:
+      Ingot/Uranium,
+      AmmoMagazine/NATO_5p56x45mm,
+      PhysicalGunObject/AutomaticRifleItem,
+      PhysicalGunObject/AngleGrinderItem,
+      PhysicalGunObject/HandDrillItem,
+      PhysicalGunObject/WelderItem,
+      Ingot/Iron, Ingot/Platinum,
+      Ore/Cobalt, Ore/Silver, Ore/Gold,
+      Ingot/Gold, Ingot/Silver,
+      Ingot/Magnesium, Ore/Iron, Ore/Ice,
+      Component/Girder,
+      Component/Superconductor,
+      Component/Construction,
+      Component/BulletproofGlass,
+      Component/LargeTube,
+      Component/GravityGenerator,
+      Component/Medical,
+      Component/RadioCommunication,
+      Component/Detector,
+      Component/Explosives,
+      Component/SolarCell,
+      Component/SteelPlate,
+      Component/MetalGrid,
+      Component/Reactor,
+      Component/InteriorPlate,
+      Component/Computer,
+      Component/Display,
+      Component/SmallTube,
+      Component/Motor,
+      Component/PowerCell, Ingot/Nickel,
+      Ingot/Silicon, Ingot/Stone,
+      Ingot/Cobalt,
+      OxygenContainerObject/OxygenBottle,
+      GasContainerObject/HydrogenBottle,
+      Component/Thrust,
+      AmmoMagazine/NATO_25x184mm
    */
   public string ItemId(IMyInventoryItem item) {
     return item.Content.TypeId.ToString().Replace("MyObjectBuilder_", "") +
@@ -366,6 +419,7 @@ public class Utils : IDisposable {
     }
   }
 
+  // adds assembling or disassembling task for specified itemId and count
   public bool AddAssemblerTask(IMyProductionBlock assembler, string itemId, VRage.MyFixedPoint count) {
     
     var fixedItemId = "MyObjectBuilder_BlueprintDefinition/" + itemId.Split('/')[1];
@@ -384,6 +438,10 @@ public class Utils : IDisposable {
     return true;
   }
 
+  // returns block with specified name casted to specified type T;
+  // throws Exception if not found
+  // example:
+  //    var assembler = utils.FindBlock<IMyProductionBlock>("Assembler 42");
   public T FindBlock<T>(string name, FilterGrid filter = FilterGrid.None) where T : class {
     foreach (var block in blocks) {
       if (!checkFilterGrid(filter, block)) { continue; }
@@ -399,6 +457,10 @@ public class Utils : IDisposable {
     throw new Exception(string.Format("failed to find block \"{0}\"", name));
   }
 
+  // returns block with specified name casted to specified type T;
+  // returns null if not found
+  // example:
+  //    var assembler = utils.FindBlock<IMyProductionBlock>("Assembler 42");
   public T FindBlockIfExists<T>(string name, FilterGrid filter = FilterGrid.None) where T : class {
     try {
       return FindBlock<T>(name, filter);
@@ -422,10 +484,13 @@ public class Utils : IDisposable {
       }
     }
   }
+
+  // returns counts of all items in all inventories on the current grid
   public Dictionary<string, VRage.MyFixedPoint> AllItemCounts() {
     calculateItemCounts();
     return itemCounts;
   }
+  // returns count of specified item in all inventories on the current grid
   public VRage.MyFixedPoint ItemCount(string id) {
     calculateItemCounts();
     if (itemCounts.ContainsKey(id)) {
@@ -433,6 +498,7 @@ public class Utils : IDisposable {
     }
     return 0;
   }
+  // formats count of inventory items for readability
   public static string FormatNumber(int num) {
     if (num >= 1000000)
       return (num / 1000000d).ToString("0.###") + "M";
@@ -440,6 +506,7 @@ public class Utils : IDisposable {
       return (num / 1000d).ToString("0.###") + "K";
     return num.ToString("#,0");
   }
+  // formats count of inventory items for readability
   public static string FormatNumber(VRage.MyFixedPoint num) {
     return FormatNumber((int)num);
   }
@@ -447,83 +514,3 @@ public class Utils : IDisposable {
 }
   //... end of Utils ...................................
 
-// assembler_control2
-public void Main(string argument) {
-  using (var utils = new Utils(this)) {
-    try {
-      /*var test1 = utils.FindBlock<IMyProductionBlock>("Refinery28");
-      utils.Print(test1.GetInventory());
-      utils.Print(test1.InventoryCount);
-      utils.Print(test1.GetInventory(0));
-      utils.Print(test1.GetInventory(1));*/
-
-      var autoAssembler = utils.FindBlock<IMyProductionBlock>("AutoAssembler");
-      var autoAssemblerBusy = !autoAssembler.IsQueueEmpty;
-      if (autoAssemblerBusy) {
-        utils.Print("AutoAssembler is busy");
-      } else {
-        utils.Print("AutoAssembler is ready");
-      }      
-
-      Dictionary<string, int> goal = new Dictionary<string, int>();
-      goal["Component/SteelPlate"] = 30000;
-      goal["Component/InteriorPlate"] = 1000;
-      goal["Component/Construction"] = 5000;
-      goal["Component/Motor"] = 1000;
-      goal["Component/Computer"] = 1000;
-      goal["Component/MetalGrid"] = 100;
-      goal["Component/SmallTube"] = 3000;
-      goal["Component/LargeTube"] = 2000;
-      goal["Component/Display"] = 1000;
-      goal["Component/PowerCell"] = 100;
-
-      goal["Component/Girder"] = 100;
-      goal["Component/BulletproofGlass"] = 100;
-      goal["Component/Reactor"] = 100;
-      goal["Component/Thrust"] = 1000;
-      goal["Component/GravityGenerator"] = 100;
-      goal["Component/Medical"] = 10;
-      goal["Component/RadioCommunication"] = 10;
-      goal["Component/Detector"] = 100;
-      goal["Component/Explosives"] = 100;
-      goal["Component/SolarCell"] = 100;
-      goal["Component/Superconductor"] = 100;
-
-      foreach(var goal_item in goal) {
-        var real_count_item = utils.ItemCount(goal_item.Key);
-        var marker = real_count_item < goal_item.Value ? "-" : "+";
-        utils.Print(string.Format(
-          "{0} {1,-20}: {2,6} / {3,6}", marker, 
-          goal_item.Key.Replace("Component/", ""), 
-          real_count_item, goal_item.Value));
-        if (!autoAssemblerBusy && real_count_item < goal_item.Value) {
-          utils.AddAssemblerTask(autoAssembler, goal_item.Key, goal_item.Value - real_count_item);
-        }
-      }
-
-      List<string> badThings = new List<string>() {
-        "PhysicalGunObject/AutomaticRifleItem",
-        "PhysicalGunObject/AngleGrinderItem",
-        "PhysicalGunObject/HandDrillItem",
-        "PhysicalGunObject/WelderItem",
-      };
-      utils.Print("");
-      var autoDisassembler = utils.FindBlock<IMyProductionBlock>("AutoDisassembler");
-      if (autoDisassembler.IsQueueEmpty) {
-        foreach (var id in badThings) {
-          var count = utils.ItemCount(id);
-          if (count > 1) {
-            if (utils.AddAssemblerTask(autoDisassembler, id, count - 1)) {
-              utils.Print(string.Format("disassembling queued: {0} x {1}", count - 1, id));
-            }
-          }
-        }
-      } else {
-        utils.Print("AutoDisassembler is busy");
-      }
-      
-    } catch (Exception e) {
-      utils.Print(e);
-    }
-  }
-}
